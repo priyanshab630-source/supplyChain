@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+
+# Node
+node_modules/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# LangSmith
+.langgraph_api/
+
+# Build
+dist/
+build/
+
+# Cache
+.cache/
+
+notebooks/
+data/
+
+graph.html
+

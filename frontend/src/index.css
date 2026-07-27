@@ -1,0 +1,114 @@
+body {
+  font-family: system-ui, sans-serif;
+  background: #0f1115;
+  color: #e7e7ea;
+  margin: 0;
+}
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.chat-window {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bubble {
+  padding: 10px 14px;
+  border-radius: 10px;
+  max-width: 80%;
+}
+
+.bubble.user {
+  align-self: flex-end;
+  background: #2563eb;
+}
+
+.bubble.assistant {
+  align-self: flex-start;
+  background: #1f2430;
+}
+
+.agent-flow {
+  list-style: none;
+  display: flex;
+  gap: 10px;
+  padding: 0;
+  flex-wrap: wrap;
+}
+
+.agent-flow li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.agent-flow .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #555;
+}
+
+.agent-flow .done { opacity: 1; }
+.agent-flow .done .dot { background: #22c55e; }
+.agent-flow .error { opacity: 1; }
+.agent-flow .error .dot { background: #ef4444; }
+
+.result-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.result-card {
+  background: #1a1d24;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.result-card pre {
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+form {
+  display: flex;
+  gap: 8px;
+}
+
+input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: #1a1d24;
+  color: inherit;
+}
+
+button {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
