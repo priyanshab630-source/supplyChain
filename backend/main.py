@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.database import init_db
 from backend.routers.chat import router as chat_router
+from backend.routers.admin import router as admin_router
+
+
 
 app = FastAPI(title="Supply Chain Multi-Agent API")
 
@@ -12,6 +15,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(admin_router)
 
 
 @app.on_event("startup")

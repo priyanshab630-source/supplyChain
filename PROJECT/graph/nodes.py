@@ -86,10 +86,15 @@ def inventory_node(state: SupplyChainState):
     print("=" * 60)
 
     try:
-        agent_output = inventory_agent.run(state["question"])
-        payload = extract_tool_result(agent_output)
-        result = InventoryResult(**payload) if payload else None
-        error = None if result is not None else "Inventory data could not be retrieved."
+        if state.get("tank_id"):
+            result = inventory_engine.run(f"show inventory of {state['tank_id']}")
+            error = None
+
+        else:
+            agent_output = inventory_agent.run(state["question"])
+            payload = extract_tool_result(agent_output)
+            result = InventoryResult(**payload) if payload else None
+            error = None if result is not None else "Inventory data could not be retrieved."
 
     except Exception as exc:
         result = None
@@ -103,7 +108,7 @@ def inventory_node(state: SupplyChainState):
 
         "inventory": result,
         "errors": append_error(state, error),
-        "completed_agents": update_completed(state,"inventory"),
+        "completed_agents": update_completed(state, "inventory"),
         "next_agent": "supervisor",
     }
 
@@ -116,10 +121,15 @@ def forecast_node(state: SupplyChainState):
     print("=" * 60)
 
     try:
-        agent_output = forecast_agent.run(state["question"])
-        payload = extract_tool_result(agent_output)
-        result = ConsumptionForecastResult(**payload) if payload else None
-        error = None if result is not None else "Forecast data could not be retrieved."
+        if state.get("tank_id"):
+            result = forecast_engine.run(f"forecast consumption for {state['tank_id']}")
+            error = None
+
+        else:
+            agent_output = forecast_agent.run(state["question"])
+            payload = extract_tool_result(agent_output)
+            result = ConsumptionForecastResult(**payload) if payload else None
+            error = None if result is not None else "Forecast data could not be retrieved."
 
     except Exception as exc:
         result = None
@@ -136,8 +146,8 @@ def forecast_node(state: SupplyChainState):
         "next_agent": "supervisor",
     }
 
-    
-    
+
+# Supplier
 def supplier_node(state: SupplyChainState):
     print("\n========== SUPPLIER NODE ==========")
     print("=" * 60)
@@ -146,8 +156,25 @@ def supplier_node(state: SupplyChainState):
 
     try:
         if state.get("tank_id") or state.get("supplier_name"):
-            result = supplier_engine.run(state["question"])
+
+            supplier_name = state.get("supplier_name")
+            tank_id = state.get("tank_id")
+
+            if not supplier_name and tank_id:
+                supplier_name = supplier_engine.get_supplier_for_tank(tank_id)
+
+                if supplier_name is None:
+                    raise ValueError(
+                        f"{tank_id} does not have a supplier assigned in the current data."
+                    )
+
+            # run_for_supplier - not run(f"...") - since supplier_name
+            # is already clean here. Building a synthetic sentence and
+            # re-parsing it with regex is what previously produced
+            # garbled lookups.
+            result = supplier_engine.run_for_supplier(supplier_name)
             error = None
+
         else:
             agent_output = supplier_agent.run(state["question"])
             payload = extract_tool_result(agent_output)
@@ -160,7 +187,9 @@ def supplier_node(state: SupplyChainState):
         print(f"Supplier node error: {error}")
 
     return {
-        "messages": [AIMessage(content="Supplier analysis completed.")],
+        "messages": [
+            AIMessage(content="Supplier analysis completed.")
+        ],
         "supplier": result,
         "errors": append_error(state, error),
         "completed_agents": update_completed(state, "supplier"),

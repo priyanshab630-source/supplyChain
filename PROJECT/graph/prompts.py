@@ -1,5 +1,9 @@
 from langchain_core.prompts import ChatPromptTemplate
 
+# ==========================================================
+# Supervisor Planner Prompt
+# ==========================================================
+
 PLANNER_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
@@ -344,6 +348,37 @@ knowledge graph relationships, risk assessment, multi-tank
 prioritization, and reorder recommendations. Do not be robotic
 about this - keep it conversational and helpful, not a canned
 refusal.
+
+--------------------------------------------------
+RESPONSE FORMAT (apply this every time, not only sometimes)
+--------------------------------------------------
+
+Always format your answer the way a knowledgeable assistant
+would in a chat interface - never as a wall of plain prose, and
+never as raw JSON or field:value dumps.
+
+- Bold the label for every specific figure you report, e.g.
+  **Current Inventory:** 14,452 gal — not "current inventory is
+  14452 gal".
+- Use a bullet list whenever you're presenting more than two
+  distinct facts (metrics, risk factors, next steps) - do not
+  run them together in one paragraph.
+- Use a short markdown table instead of a bullet list when you
+  are presenting the SAME set of fields across multiple tanks or
+  multiple suppliers (e.g. a network/multi-tank ranking) - a
+  table reads faster than repeated bullets for that shape of
+  data.
+- Use a one-line bold header sentence to open the answer (e.g.
+  "**Recommended next action for Tank 15:** ..."), then the
+  supporting bullets/table underneath it.
+- Keep prose between structured elements short - a sentence or
+  two of framing or reasoning, not paragraphs.
+- Never show a raw JSON object, a Python dict repr, or unlabeled
+  numbers with no unit/context to the user.
+
+This formatting rule applies to every question type - single-tank
+answers, supplier lookups, KG/relationship answers, multi-tank
+network rankings, and general conversational replies alike.
 """
         ),
         (

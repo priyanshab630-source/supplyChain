@@ -95,7 +95,15 @@ class KGAgent:
     def _run_deterministic(self, question, tank_id, visualize):
         cypher = build_tank_cypher(tank_id)
         records = execute_cypher.invoke({"cypher": cypher})
-        insights = generate_insights.invoke({"records": records})
+
+        # Pass tank_id/question through so generate_insights can
+        # ground its answer (and label) correctly instead of
+        # falling back to a generic "this tank".
+        insights = generate_insights.invoke({
+            "records": records,
+            "question": question,
+        })
+
         graph_path = None
         should_visualize = (
             visualize
@@ -104,7 +112,13 @@ class KGAgent:
         )
 
         if should_visualize:
-            graph_path = graph_query.invoke({"question": tank_id})
+            # FIXED: previously called `graph_query.invoke({"question": tank_id})`,
+            # which re-derives Cypher via the LLM from scratch - reintroducing
+            # the exact non-determinism this deterministic path exists to avoid
+            # (same question, sometimes 0 records). Reuse the `cypher` already
+            # built above instead, so the insights and the visualization are
+            # guaranteed to reflect the SAME query result.
+            graph_path = visualize_subgraph.invoke({"cypher": cypher})
 
         return KGResult(
             question=tank_id,
@@ -117,7 +131,7 @@ class KGAgent:
     def _run_llm_agent(self, question):
         agent_output = self._llm_agent.run(question)
         messages = agent_output.get("messages", [])
-        
+
         cypher_msg = _last_tool_message(messages, "generate_cypher")
         cypher_query = cypher_msg.content if cypher_msg else ""
 
