@@ -3,12 +3,6 @@ import re
 import pandas as pd
 from PROJECT.models.supplier_models import SupplierResult
 
-# Words that commonly follow "supplier" in ordinary phrasing but are
-# NOT part of an actual supplier name - e.g. "Tank 1 supplier
-# details" should NOT extract "Supplier details". Without this, that
-# false match cascades: the fast path in nodes.py builds a synthetic
-# sentence from the wrong name, and this same regex mangles it a
-# second time on re-parse.
 SUPPLIER_NAME_STOPWORDS = (
     r"details?|info(?:rmation)?|data|reliability|performance|"
     r"schedule|deliver(?:y|ies)|shipments?|dependency|risk"

@@ -11,13 +11,6 @@ from PROJECT.database.neo4j import get_graph
 model = get_groq_model()
 
 
-# ============================================================
-# Deterministic Cypher for the common "everything about Tank X"
-# case. Skips the Cypher-generation LLM entirely for this shape
-# of question, so results are consistent call to call instead of
-# depending on the LLM reliably reproducing this exact pattern
-# from the system prompt every time.
-# ============================================================
 
 def build_tank_cypher(tank_id: str) -> str:
     safe_tank_id = tank_id.replace("'", "\\'")
@@ -44,28 +37,6 @@ def _extract_relationship_type(rels):
     return str(rels) if rels is not None else "RELATED"
 
 
-# ============================================================
-# Compact Neo4j records before sending to the LLM
-#
-# A `MATCH (t:Tank {tank_id:'Tank 26'})-[r]-(n) RETURN t,r,n`
-# result repeats the SAME tank properties on every single row
-# (once as `t`, often again nested inside `r`). That redundancy
-# is what blew the Groq TPM limit (8187 requested vs an 8000
-# limit) on a tank with barely a dozen relationships.
-#
-# Two layers of defense, not one:
-# 1. Structural compaction - tank properties pulled out once;
-#    each row reduced to {relationship_type, other_node}.
-# 2. HAS_CONSUMPTION rows specifically sampled down (these are
-#    hourly readings, potentially dozens per tank, and are the
-#    least informative data for relationship/backup questions
-#    anyway) instead of sent in full.
-#
-# Even after both, a hard character-length cap is applied as a
-# last-resort guard in generate_insights() below, so this class
-# of error is mechanically impossible regardless of future data
-# shape - not just "should be fine now".
-# ============================================================
 
 MAX_CONSUMPTION_SAMPLES = 3
 
@@ -232,15 +203,7 @@ def generate_insights(records, question: str = ""):
 
     payload_json = json.dumps(compacted, indent=2, default=str)
 
-    # ------------------------------------------------------
-    # Hard safety net: even after structural compaction and
-    # consumption-sampling above, cap the raw payload length.
-    # ~6000 chars is roughly 1500 tokens - comfortably under
-    # any small-model TPM budget with room for the rest of the
-    # prompt and the response. This makes a repeat of the 413
-    # "Request too large" error mechanically impossible,
-    # regardless of how much data a future tank/query returns.
-    # ------------------------------------------------------
+    
     MAX_PAYLOAD_CHARS = 6000
 
     if len(payload_json) > MAX_PAYLOAD_CHARS:

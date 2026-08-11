@@ -2,12 +2,18 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000/api";
 
 export async function createThread() {
   const res = await fetch(`${API_BASE}/threads`, { method: "POST" });
+  if (!res.ok) {
+    throw new Error(`Failed to create thread: ${res.status} ${res.statusText}`);
+  }
   const data = await res.json();
   return data.thread_id;
 }
 
 export async function fetchHistory(threadId) {
   const res = await fetch(`${API_BASE}/threads/${threadId}/history`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch history: ${res.status} ${res.statusText}`);
+  }
   return res.json();
 }
 
