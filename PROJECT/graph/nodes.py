@@ -168,6 +168,10 @@ def supplier_node(state: SupplyChainState):
                         f"{tank_id} does not have a supplier assigned in the current data."
                     )
 
+            # run_for_supplier - not run(f"...") - since supplier_name
+            # is already clean here. Building a synthetic sentence and
+            # re-parsing it with regex is what previously produced
+            # garbled lookups.
             result = supplier_engine.run_for_supplier(supplier_name)
             error = None
 

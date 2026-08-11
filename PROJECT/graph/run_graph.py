@@ -76,7 +76,7 @@ def run_graph(question: str, thread_id: str = "default"):
         print("=" * 80)
         print(event)
 
-        for node_name, node_output in event.items():
+        for node_output in event.items():
 
             if not isinstance(node_output, dict):
                 continue
