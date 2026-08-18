@@ -37,6 +37,61 @@ body {
 .bubble.assistant {
   align-self: flex-start;
   background: #1f2430;
+  max-width: 100%;
+}
+
+/* Rendered markdown inside assistant bubbles */
+
+.bubble.assistant p {
+  margin: 0 0 8px 0;
+  line-height: 1.5;
+}
+
+.bubble.assistant p:last-child {
+  margin-bottom: 0;
+}
+
+.bubble.assistant strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.bubble.assistant ul,
+.bubble.assistant ol {
+  margin: 4px 0 8px 0;
+  padding-left: 20px;
+}
+
+.bubble.assistant li {
+  margin: 3px 0;
+  line-height: 1.45;
+}
+
+.bubble.assistant table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.bubble.assistant th,
+.bubble.assistant td {
+  border: 1px solid #333a47;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.bubble.assistant th {
+  background: #262c38;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.bubble.assistant code {
+  background: #11141b;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 .agent-flow {

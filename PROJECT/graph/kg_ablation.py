@@ -40,23 +40,9 @@ from PROJECT.database.neo4j import get_graph
 from PROJECT.scripts.seed_backs_up_relationships import run as reseed_backs_up
 
 
-# Each scenario: a question, and the tank_id(s) a correct answer
-# must mention. Fill these in against your actual switchover_group
-# assignments before treating results as meaningful.
-SCENARIOS = [
-    {
-        "question": "If Tank 1 malfunctions, which tank backs it up?",
-        "expected_tank_ids": ["Tank 2"],
-    },
-    {
-        "question": "What tank covers for Tank 4 if it goes offline?",
-        "expected_tank_ids": ["Tank 3"],
-    },
-    # Add more scenarios here, covering each gas type (Gas A always-on
-    # pair, Gas C always-online pool, everything else online/standby)
-    # once real switchover_group data exists.
-]
-
+from PROJECT.eval.scenarios import generate_kg_backup_scenarios
+ 
+SCENARIOS = generate_kg_backup_scenarios(max_scenarios=30)
 
 def _remove_backs_up_relationships():
     get_graph().query("MATCH ()-[r:BACKS_UP]-() DELETE r")

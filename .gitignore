@@ -38,5 +38,8 @@ notebooks/
 data/
 
 graph.html
+supply_chain.db-shm
+supply_chain.db-wal
 supply_chain.db
+
 

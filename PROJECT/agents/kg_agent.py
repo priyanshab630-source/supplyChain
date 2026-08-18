@@ -12,6 +12,8 @@ from PROJECT.tools.kg_tools import (
     visualize_subgraph
 )
 from PROJECT.orchestrators.kg_orchestrator import build_kg_agent
+from langsmith import traceable
+
 
 VISUALIZE_KEYWORDS = [
     "visualize",
@@ -60,7 +62,6 @@ def _parse_tool_payload(content):
 
     return content
 
-
 class KGAgent:
 
     def __init__(self):
@@ -73,18 +74,6 @@ class KGAgent:
 
         return None
 
-    @staticmethod
-    def can_handle(query: str):
-        q = query.lower()
-        keywords = [
-            "relationship",
-            "graph",
-            "connected",
-            "network",
-            "dependency"
-        ]
-
-        return any(k in q for k in keywords)
 
     @staticmethod
     def wants_visualization(question: str) -> bool:
@@ -92,6 +81,7 @@ class KGAgent:
 
         return any(k in q for k in VISUALIZE_KEYWORDS)
 
+    @traceable(name="KGAgent.run_deterministic", run_type="chain")
     def _run_deterministic(self, question, tank_id, visualize):
         cypher = build_tank_cypher(tank_id)
         records = execute_cypher.invoke({"cypher": cypher})
@@ -128,6 +118,7 @@ class KGAgent:
             graph_path=graph_path
         )
 
+    @traceable(name="KGAgent.run_llm_agent", run_type="chain")
     def _run_llm_agent(self, question):
         agent_output = self._llm_agent.run(question)
         messages = agent_output.get("messages", [])
@@ -168,6 +159,7 @@ class KGAgent:
             graph_path=graph_path,
         )
 
+    @traceable(name="KGAgent.run", run_type="chain")
     def run(self,question: str,visualize: bool = None):
         print("Running Knowledge Graph Agent...")
         tank_id = self.extract_tank_id(question)

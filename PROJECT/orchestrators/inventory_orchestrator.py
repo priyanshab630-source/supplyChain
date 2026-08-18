@@ -1,9 +1,13 @@
 from PROJECT.factories.agent_factory import build_agent
+from PROJECT.middleware.stacks import tank_agent_middleware
+from PROJECT.llm.groq import get_groq_model
 
 from PROJECT.tools.inventory_tools import inventory_risk_tool
 
 
 def build_inventory_agent():
+    model = get_groq_model()
+
     return build_agent(
         tools=[inventory_risk_tool],
         system_prompt="""
@@ -16,5 +20,6 @@ inventory_risk_tool a second time under any circumstances - one call
 is always sufficient.
 
 Never calculate inventory yourself - only use the tool's numbers.
-"""
+""",
+        middleware=tank_agent_middleware(model),
     )

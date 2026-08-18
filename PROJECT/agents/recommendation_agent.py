@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
 
+from langsmith import traceable
+
 from PROJECT.models.recommendation_models import Recommendation
 from PROJECT.models.inventory_models import InventoryResult
 from PROJECT.models.risk_models import RiskResult
 from PROJECT.models.supplier_models import SupplierResult
-
 
 
 
@@ -85,11 +86,7 @@ class RecommendationAgent:
 
         return "UNKNOWN"
 
-    @staticmethod
-    def can_handle(state):
-        return state.risk is not None
-
-    
+    @traceable(name="RecommendationAgent.run", run_type="chain")
     def run(self, state):
         print("Running Recommendation Agent...")
         inventory = state.get("inventory")

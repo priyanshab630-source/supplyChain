@@ -4,7 +4,7 @@ from PROJECT.models.inventory_models import InventoryResult
 from PROJECT.models.consumption_forecast_models import ConsumptionForecastResult
 from PROJECT.models.supplier_models import SupplierResult
 from PROJECT.models.kg_models import KGResult
-
+from langsmith import traceable
 
 class RiskAgent:
 
@@ -125,6 +125,7 @@ class RiskAgent:
         return "UNKNOWN"
 
     # Main Workflow
+    @traceable(name="RiskAgent.run", run_type="chain")
     def run(self, state):
         print("Running Risk Manager Agent...")
         inventory_data = state.get("inventory")

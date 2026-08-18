@@ -6,8 +6,10 @@ from PROJECT.graph.workflow import graph
 from PROJECT.graph.run_graph import extract_tank_id, extract_supplier_name
 
 from sqlmodel import Session
-
 from backend import persistence
+from PROJECT.guardrails.input_guardrail import validate_question
+from PROJECT.guardrails.exceptions import GuardrailViolation
+from PROJECT.observability.tracing import build_run_config
 
 
 def _build_initial_state(question: str) -> dict:
@@ -54,19 +56,26 @@ def stream_graph_events(question: str, thread_id: str, session: Session):
     written to Postgres so the turn can be replayed later via
     /threads/{id}/history.
     """
+    
+    try:
+        validate_question(question)
+    except GuardrailViolation as exc:
+        # Rejected before it's persisted or sent to any LLM/graph node -
+        # streamed as its own SSE event so the frontend can surface it
+        # the same way it already handles other node-level errors.
+        yield _sse("guardrail_error", {"error": str(exc)})
+        return
 
     initial_state = _build_initial_state(question)
-    config = {"configurable": {"thread_id": thread_id}}
+    config = build_run_config(thread_id, question, source="api")
+
 
     persistence.save_message(session, thread_id, "user", question)
 
     for event in graph.stream(initial_state, config=config):
-
         for node_name, node_output in event.items():
-
             if not isinstance(node_output, dict):
                 continue
-
             payload = {
                 key: _serialize(value)
                 for key, value in node_output.items()
@@ -74,8 +83,6 @@ def stream_graph_events(question: str, thread_id: str, session: Session):
             }
 
             persistence.save_agent_run(session, thread_id, node_name, payload)
-
             yield _sse(node_name, payload)
-
             if node_name == "final_answer" and node_output.get("final_answer"):
                 persistence.save_message(session, thread_id, "assistant", node_output["final_answer"])

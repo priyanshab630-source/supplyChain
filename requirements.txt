@@ -15,4 +15,8 @@ langchain-neo4j
 neo4j
 pyvis
 networkx
-
+langgraph
+langsmith
+psycopg_pool
+langgraph-checkpoint-sqlite
+langgraph-checkpoint-postgres

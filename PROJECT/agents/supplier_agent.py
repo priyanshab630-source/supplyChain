@@ -2,6 +2,8 @@ import re
 
 import pandas as pd
 from PROJECT.models.supplier_models import SupplierResult
+from langsmith import traceable
+
 
 # Words that commonly follow "supplier" in ordinary phrasing but are
 # NOT part of an actual supplier name - e.g. "Tank 1 supplier
@@ -236,23 +238,8 @@ class SupplierAgent:
 
         return "Supplier performing within expected range."
 
-    @staticmethod
-    def can_handle(query: str):
 
-        q = query.lower()
-
-        keywords = [
-            "supplier",
-            "shipment",
-            "delivery",
-            "vendor",
-            "transport",
-            "dispatch",
-            "site"
-        ]
-
-        return any(k in q for k in keywords)
-
+    @traceable(name="SupplierAgent.run_for_supplier", run_type="chain") 
     def run_for_supplier(self, supplier_name: str) -> SupplierResult:
         """
         Runs the full supplier analysis pipeline for an ALREADY-KNOWN
@@ -305,6 +292,7 @@ class SupplierAgent:
             recommendation=recommendation
         )
 
+    @traceable(name="SupplierAgent.run", run_type="chain")
     def run(self, question: str) -> SupplierResult:
         """
         Free-text entry point - used only by the LLM tool-agent's

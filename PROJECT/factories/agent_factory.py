@@ -35,8 +35,8 @@ def default_middleware(model=None):
 
 class AgentOrchestrator:
 
-    def __init__( self, system_prompt, tools,middleware=None,):
-        model = get_groq_model()
+    def __init__(self, system_prompt, tools, middleware=None, model=None):
+        model = model or get_groq_model()
         self.agent = create_agent(
             model=model,
             tools=tools,
@@ -47,7 +47,6 @@ class AgentOrchestrator:
                 else default_middleware(model)
             ),
         )
-
     def run(self, question: str):
         response = self.agent.invoke(
             {
@@ -61,9 +60,10 @@ class AgentOrchestrator:
         return {"messages": response["messages"]}
 
 
-def build_agent( system_prompt, tools,middleware=None,):
+def build_agent(system_prompt, tools, middleware=None, model=None):
     return AgentOrchestrator(
         system_prompt,
         tools,
         middleware=middleware,
+        model=model,
     )

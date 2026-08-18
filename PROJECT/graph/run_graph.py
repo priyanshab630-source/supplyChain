@@ -4,6 +4,8 @@ from langchain_core.messages import HumanMessage
 from langgraph.graph.message import add_messages
 
 from PROJECT.graph.workflow import graph
+from PROJECT.guardrails.input_guardrail import validate_question
+from PROJECT.observability.tracing import build_run_config
 
 
 def extract_tank_id(question: str):
@@ -22,10 +24,7 @@ def extract_supplier_name(question: str):
     uppercase letter and contain no spaces - matches the dataset's
     actual naming convention (Supplier A, Supplier B, ...) and
     naturally excludes ordinary sentence words that happen to follow
-    "supplier" (of, details, information, the, ...), since those are
-    lowercase in normal phrasing. A whitelist on the identifier's
-    shape is far more robust than trying to blacklist every possible
-    filler word.
+    "supplier".
     """
 
     match = re.search(r"(?i:supplier)\s+([A-Z][A-Za-z0-9]*)", question)
@@ -36,14 +35,19 @@ def extract_supplier_name(question: str):
     return None
 
 
-def run_graph(question: str, thread_id: str = "default"):
+def run_graph(question: str, thread_id: str = "default", source: str = "cli"):
     """
     thread_id identifies the conversation. Pass the SAME thread_id
-    across multiple calls to keep them in one conversation (the
-    checkpointer on `graph` persists state per thread_id, so
-    `messages` accumulates instead of starting over each call).
-    Use a fresh thread_id to start an unrelated conversation.
+    across multiple calls to keep them in one conversation.
+    `source` is passed through to LangSmith's run tags (see
+    observability/tracing.py) - defaults to "cli" for direct
+    invocation; the P5 simulator passes source="simulator" so its
+    runs are distinguishable from real questions in the LangSmith UI.
     """
+    
+    validate_question(question)
+    config = build_run_config(thread_id, question, source=source)
+
 
     initial_state = {
         "messages": [
@@ -58,6 +62,9 @@ def run_graph(question: str, thread_id: str = "default"):
         "kg": None,
         "network_results": None,
         "network_scope": None,
+        "malfunction": None,
+        "allocation": None,
+        "shipment_delay": None,
         "risk": None,
         "recommendation": None,
         "final_answer": None,
@@ -67,7 +74,6 @@ def run_graph(question: str, thread_id: str = "default"):
         "next_agent": "supervisor",
     }
 
-    config = {"configurable": {"thread_id": thread_id}}
 
     accumulated_state = dict(initial_state)
 
@@ -76,7 +82,7 @@ def run_graph(question: str, thread_id: str = "default"):
         print("=" * 80)
         print(event)
 
-        for node_output in event.items():
+        for node_name, node_output in event.items():
 
             if not isinstance(node_output, dict):
                 continue
@@ -95,4 +101,3 @@ def run_graph(question: str, thread_id: str = "default"):
                     accumulated_state[key] = value
 
     return accumulated_state
-

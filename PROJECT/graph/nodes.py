@@ -1,4 +1,5 @@
 import json
+import re
 from langchain_core.messages import AIMessage, ToolMessage
 from PROJECT.state.agent_state import SupplyChainState
 from PROJECT.models.inventory_models import InventoryResult
@@ -9,16 +10,23 @@ from PROJECT.orchestrators.inventory_orchestrator import build_inventory_agent
 from PROJECT.orchestrators.consumption_orchestrator import build_forecast_agent
 from PROJECT.orchestrators.supplier_orchestrator import build_supplier_agent
 from PROJECT.agents.kg_agent import kg_agent
+from PROJECT.agents.shipment_delay_agent import shipment_delay_agent
 from PROJECT.agents.risk_manager_agent import RiskAgent
 from PROJECT.agents.recommendation_agent import RecommendationAgent
+from PROJECT.agents.malfunction_agent import malfunction_agent
+from PROJECT.agents.allocation_agent import allocation_agent
 from PROJECT.tools.inventory_tools import (
     inventory_agent as inventory_engine,
     tank_df as tank_master_df,
 )
 from PROJECT.tools.consumption_forcast_tools import forecast_agent as forecast_engine
 from PROJECT.tools.supplier_tools import supplier_agent as supplier_engine
+from PROJECT.tools.tank_status_tools import apply_surge_adjustment, apply_forecast_surge_adjustment
 from PROJECT.graph.prompts import FINAL_ANSWER_PROMPT
 from PROJECT.llm.groq import get_groq_model
+from PROJECT.guardrails.output_guardrail import check_for_leakage, find_ungrounded_tank_ids
+from PROJECT.guardrails.recommendation_guardrail import validate_recommendation
+from PROJECT.data_loader.loader import write_event_log
 
 risk_agent = RiskAgent()
 recommendation_agent = RecommendationAgent()
@@ -96,6 +104,9 @@ def inventory_node(state: SupplyChainState):
             result = InventoryResult(**payload) if payload else None
             error = None if result is not None else "Inventory data could not be retrieved."
 
+        if result is not None:
+            result = apply_surge_adjustment(result)
+
     except Exception as exc:
         result = None
         error = str(exc)
@@ -131,6 +142,9 @@ def forecast_node(state: SupplyChainState):
             result = ConsumptionForecastResult(**payload) if payload else None
             error = None if result is not None else "Forecast data could not be retrieved."
 
+        if result is not None:
+            result = apply_forecast_surge_adjustment(result)
+
     except Exception as exc:
         result = None
         error = str(exc)
@@ -154,36 +168,45 @@ def supplier_node(state: SupplyChainState):
     print("Running Supplier Node")
     print("=" * 60)
 
+    result = None
+    error = None
+    resolved_supplier_name = None
+    tank_id = state.get("tank_id")
+
     try:
-        if state.get("tank_id") or state.get("supplier_name"):
+        if tank_id or state.get("supplier_name"):
 
-            supplier_name = state.get("supplier_name")
-            tank_id = state.get("tank_id")
+            resolved_supplier_name = state.get("supplier_name")
 
-            if not supplier_name and tank_id:
-                supplier_name = supplier_engine.get_supplier_for_tank(tank_id)
+            if not resolved_supplier_name and tank_id:
+                resolved_supplier_name = supplier_engine.get_supplier_for_tank(tank_id)
 
-                if supplier_name is None:
+                if resolved_supplier_name is None:
                     raise ValueError(
                         f"{tank_id} does not have a supplier assigned in the current data."
                     )
 
-            # run_for_supplier - not run(f"...") - since supplier_name
-            # is already clean here. Building a synthetic sentence and
-            # re-parsing it with regex is what previously produced
-            # garbled lookups.
-            result = supplier_engine.run_for_supplier(supplier_name)
-            error = None
+            result = supplier_engine.run_for_supplier(resolved_supplier_name)
 
         else:
             agent_output = supplier_agent.run(state["question"])
             payload = extract_tool_result(agent_output)
             result = SupplierResult(**payload) if payload else None
-            error = None if result is not None else "Supplier data could not be retrieved."
+
+            if result is None:
+                raise ValueError("Supplier data could not be retrieved.")
 
     except Exception as exc:
         result = None
-        error = str(exc)
+
+        if tank_id:
+            error = (
+                f"Supplier lookup for {tank_id} "
+                f"(resolved supplier: {resolved_supplier_name or 'unresolved'}) failed: {exc}"
+            )
+        else:
+            error = str(exc)
+
         print(f"Supplier node error: {error}")
 
     return {
@@ -226,6 +249,153 @@ def kg_node(state: SupplyChainState):
     }
 
 
+# Malfunction (P2)
+def malfunction_node(state: SupplyChainState):
+    print("\n========== MALFUNCTION NODE ==========")
+    print("=" * 60)
+    print("Running Malfunction Node")
+    print("=" * 60)
+
+    try:
+        tank_id = state.get("tank_id")
+
+        if not tank_id:
+            raise ValueError(
+                "Please specify which tank has malfunctioned, "
+                "e.g. 'Tank 1 has malfunctioned'."
+            )
+
+        result = malfunction_agent.report_malfunction(tank_id)
+        error = None
+
+    except Exception as exc:
+        result = None
+        error = str(exc)
+        print(f"Malfunction node error: {error}")
+
+    return {
+        "messages": [
+            AIMessage(content="Malfunction handling completed.")
+        ],
+        "malfunction": result,
+        "errors": append_error(state, error),
+        "completed_agents": update_completed(state, "malfunction"),
+        "next_agent": "supervisor",
+    }
+
+
+# Allocation (P3)
+GAS_PATTERN = re.compile(r"gas\s+([A-Za-z])", re.IGNORECASE)
+
+
+def _extract_gas(question: str):
+    match = GAS_PATTERN.search(question)
+    return f"Gas {match.group(1).upper()}" if match else None
+
+
+def allocation_node(state: SupplyChainState):
+    print("\n========== ALLOCATION NODE ==========")
+    print("=" * 60)
+    print("Running Allocation Node")
+    print("=" * 60)
+
+    try:
+        gas = _extract_gas(state["question"])
+
+        if not gas:
+            raise ValueError(
+                "Please specify a gas type, e.g. "
+                "'How should we allocate Gas B deliveries?'"
+            )
+
+        # Default demand: current total daily consumption across
+        # every tank storing this gas (surge-adjusted, so an active
+        # malfunction's elevated demand is reflected in the order
+        # size, not just in the affected tank's own risk score).
+        tanks_for_gas = tank_master_df.loc[tank_master_df["gas"] == gas, "tank_id"].tolist()
+        total_qty_needed = 0.0
+
+        for tank_id in tanks_for_gas:
+            try:
+                inventory = inventory_engine.run(f"show inventory of {tank_id}")
+                inventory = apply_surge_adjustment(inventory)
+                total_qty_needed += inventory.avg_daily_consumption or 0
+            except Exception:
+                continue
+
+        result = allocation_agent.allocate(gas=gas, total_qty_needed=total_qty_needed)
+        error = None
+
+    except Exception as exc:
+        result = None
+        error = str(exc)
+        print(f"Allocation node error: {error}")
+
+    return {
+        "messages": [
+            AIMessage(content="Supplier allocation completed.")
+        ],
+        "allocation": result,
+        "errors": append_error(state, error),
+        "completed_agents": update_completed(state, "allocation"),
+        "next_agent": "supervisor",
+    }
+    
+    
+DELAY_DAYS_PATTERN = re.compile(r"delay(?:ed)?\s*(?:by\s*)?(\d+)\s*day", re.IGNORECASE)
+ 
+ 
+def _extract_delay_days(question: str):
+    match = DELAY_DAYS_PATTERN.search(question)
+    return int(match.group(1)) if match else None
+ 
+ 
+ 
+def shipment_delay_node(state: SupplyChainState):
+    print("\n========== SHIPMENT DELAY NODE ==========")
+    print("=" * 60)
+    print("Running Shipment Delay Node")
+    print("=" * 60)
+ 
+    try:
+        supplier_name = state.get("supplier_name")
+        tank_id = state.get("tank_id")
+        delay_days = _extract_delay_days(state["question"])
+ 
+        if not supplier_name:
+            raise ValueError(
+                "Please specify which supplier's shipment is delayed, "
+                "e.g. 'Supplier A's shipment is delayed by 3 days'."
+            )
+ 
+        if delay_days is None:
+            raise ValueError(
+                "Please specify the delay length, e.g. 'delayed by 3 days'."
+            )
+ 
+        result = shipment_delay_agent.report_delay(
+            supplier_name=supplier_name,
+            delay_days=delay_days,
+            tank_id=tank_id,  # None is fine - agent scans every tank the supplier serves
+        )
+        error = None
+ 
+    except Exception as exc:
+        result = None
+        error = str(exc)
+        print(f"Shipment delay node error: {error}")
+ 
+    return {
+        "messages": [
+            AIMessage(content="Shipment delay analysis completed.")
+        ],
+        "shipment_delay": result,
+        "errors": append_error(state, error),
+        "completed_agents": update_completed(state, "shipment_delay"),
+        "next_agent": "supervisor",
+    }
+
+
 MAX_NETWORK_TANKS = 30
 
 
@@ -234,15 +404,6 @@ def _resolve_target_tanks(state: SupplyChainState):
     Decide which tanks this question is actually about.
 
     Returns (tank_ids, scope_label, resolve_error).
-
-    1. A supplier was named ("tanks Supplier B supplies", "what's
-       affected if Supplier B fails") -> use the supplier's tanks.
-       If NOTHING matches that supplier name, this does NOT
-       silently fall back to every tank - that would silently
-       answer a different question than the one asked. It returns
-       an empty list plus a clear resolve_error instead.
-    2. No supplier named -> fall back to every known tank (a
-       genuinely "prioritize across everything" question).
     """
 
     supplier_name = state.get("supplier_name")
@@ -268,19 +429,19 @@ def _resolve_target_tanks(state: SupplyChainState):
 def _analyze_single_tank(tank_id: str):
     """
     Run the deterministic inventory + forecast engines for one tank
-    and reduce the result to the fields needed for ranking. Returns
-    a dict with an "error" key instead of raising, so one bad tank
-    doesn't abort the whole fan-out.
+    and reduce the result to the fields needed for ranking.
     """
 
     try:
         inventory = inventory_engine.run(tank_id)
+        inventory = apply_surge_adjustment(inventory)
 
     except Exception as exc:
         return {"tank_id": tank_id, "error": str(exc)}
 
     try:
         forecast = forecast_engine.run(tank_id)
+        forecast = apply_forecast_surge_adjustment(forecast)
 
     except Exception:
         forecast = None
@@ -386,8 +547,9 @@ def recommendation_node(state: SupplyChainState):
 
     try:
         result = recommendation_agent.run(state)
+        validate_recommendation(result)  # GuardrailViolation, if raised, is caught below like any other agent error
         error = None
-
+ 
     except Exception as exc:
         result = None
         error = str(exc)
@@ -452,6 +614,18 @@ def build_final_answer_context(state: SupplyChainState) -> str:
         kg_summary = f"Question interpreted as: {kg.question}\nInsights: {kg.insights}"
         sections.append(f"Knowledge Graph Analysis:\n{truncate_text(kg_summary)}")
 
+    malfunction = state.get("malfunction")
+    if malfunction is not None:
+        sections.append(f"Malfunction Handling:\n{truncate_text(malfunction)}")
+
+    allocation = state.get("allocation")
+    if allocation is not None:
+        sections.append(f"Supplier Allocation:\n{truncate_text(allocation)}")
+        
+    shipment_delay = state.get("shipment_delay")
+    if shipment_delay is not None:
+        sections.append(f"Shipment Delay Analysis:\n{truncate_text(shipment_delay)}")
+
     network_results = state.get("network_results")
     if network_results:
         scope_label = state.get("network_scope") or "the relevant tanks"
@@ -492,6 +666,25 @@ def final_answer_node(state: SupplyChainState):
         }
     )
     answer = response.content
+ 
+    # HARD check: never let a secret/internal-error pattern reach the user.
+    answer = check_for_leakage(answer)
+ 
+    # SOFT check: log (don't block on) any tank id the answer mentions
+    # that doesn't actually exist - a grounding/hallucination signal.
+    # Never let a guardrail check itself crash answer delivery.
+    try:
+        known_tank_ids = set(tank_master_df["tank_id"].dropna().unique().tolist())
+        ungrounded = find_ungrounded_tank_ids(answer, known_tank_ids)
+        if ungrounded:
+            print(f"[GUARDRAIL] final_answer mentions unknown tank id(s): {ungrounded}")
+            write_event_log(
+                "guardrail_ungrounded_tank_ids",
+                {"tank_ids": ungrounded, "question": state["question"]},
+            )
+    except Exception as exc:
+        print(f"[GUARDRAIL] grounding check failed (non-fatal): {exc}")
+ 
     return {
         "messages": [
             AIMessage(content=answer)
@@ -499,3 +692,4 @@ def final_answer_node(state: SupplyChainState):
         "final_answer": answer,
         "next_agent": "end",
     }
+ 

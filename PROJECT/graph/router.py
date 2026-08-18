@@ -12,6 +12,9 @@ def router(state: SupplyChainState) -> Literal[
     "risk",
     "recommendation",
     "network",
+    "malfunction",
+    "allocation",
+    "shipment_delay",
     "final_answer",
 ]:
 

@@ -54,6 +54,27 @@ AVAILABLE AGENTS
      several tanks at once, then compared/ranked, rather than a
      single named tank
 
+8. malfunction
+   - A specific named tank has failed / malfunctioned / gone
+     offline RIGHT NOW and needs its failover handled
+   - Activates the correct backup tank, applies a consumption
+     surge to it, and checks whether an emergency delivery is
+     needed
+   - This is an ACTION (it writes new tank status), not just a
+     question about an existing relationship
+
+9. allocation
+   - Deciding how much of a gas each contracted supplier should
+     provide, respecting contracted supplier shares
+   - "How should we allocate Gas B deliveries", "which suppliers
+     should provide Gas A and how much"
+     
+10. shipment_delay 
+    - use when the question says a shipment/delivery is
+    delayed, late, pushed back, or asks what to do about a delayed
+    shipment (e.g. "Supplier A's shipment is delayed by 3 days, what
+    should we do?").
+
 --------------------------------------------------
 PLANNING RULES
 --------------------------------------------------
@@ -193,6 +214,62 @@ network
 -----------------------------
 
 Question:
+If Tank 1 malfunctions, which tank backs it up?
+
+Answer:
+kg
+
+-----------------------------
+
+Question:
+What covers Tank 4 if it goes offline?
+
+Answer:
+kg
+
+-----------------------------
+
+Question:
+If Tank 1 is emptied which tank should we use?
+
+Answer:
+kg
+
+-----------------------------
+
+Question:
+Tank 1 has malfunctioned
+
+Answer:
+malfunction,inventory,risk,recommendation
+
+-----------------------------
+
+Question:
+Report a failure on Tank 4 and tell me what to do
+
+Answer:
+malfunction,inventory,risk,recommendation
+
+-----------------------------
+
+Question:
+How should we allocate Gas B deliveries across suppliers?
+
+Answer:
+allocation
+
+-----------------------------
+
+Question:
+Which suppliers should provide Gas A and how much?
+
+Answer:
+allocation
+
+-----------------------------
+
+Question:
 What's the weather like today?
 
 Answer:
@@ -226,13 +303,13 @@ Answer:
 
 NOTE ON OFF-TOPIC QUESTIONS
 
-If the question has nothing to do with any of the 7 agents
+If the question has nothing to do with any of the 9 agents
 above (inventory, forecast, supplier, knowledge graph, risk,
-recommendation, network) - for example small talk, general
-knowledge, or requests unrelated to supply chain/tanks/suppliers -
-return NOTHING. An empty answer means no agent will run, and the
-question will be answered directly and politely by the final
-response step instead.
+recommendation, network, malfunction, allocation) - for example
+small talk, general knowledge, or requests unrelated to supply
+chain/tanks/suppliers - return NOTHING. An empty answer means no
+agent will run, and the question will be answered directly and
+politely by the final response step instead.
 
 Do NOT guess an agent just because the question mentions a
 word that loosely resembles a keyword. Only pick agents that
@@ -257,6 +334,33 @@ Some questions do not name an agent directly but imply one:
   a multi-tank fan-out and comparison -> use network INSTEAD of a
   single inventory/risk call, since the question isn't about one
   named tank.
+
+- Words like "backs up", "covers", "malfunctions", "goes
+  offline", "is emptied", "fails", "which tank should we use
+  instead", "substitute" describe a FAILOVER/RELATIONSHIP
+  question about a SPECIFIC named tank -> route to kg (it can
+  traverse the BACKS_UP relationship), NOT network and NOT
+  inventory/risk. Do not confuse this with "how many days of
+  cover does Tank X have" (a plain inventory question with no
+  failover language) - failover phrasing always describes
+  ANOTHER tank taking over, not X's own remaining supply.
+
+- Words like "has malfunctioned", "just failed", "report a
+  failure/malfunction", "went offline just now" describe an
+  EVENT happening right now that needs to be ACTED on (not just
+  asked about) -> use malfunction. This is different from "what
+  covers Tank X if it goes offline" (a hypothetical question, no
+  action needed -> kg) - malfunction is for when the failure has
+  actually happened and needs handling. When malfunction is used,
+  also include inventory,risk,recommendation so the answer
+  reflects the tank's new state, not just confirms the failover
+  happened.
+
+- Words like "allocate", "how much should each supplier
+  provide", "split the order", "contracted share" describe a
+  SUPPLIER ALLOCATION decision -> use allocation, not supplier
+  (supplier is for one supplier's own performance, allocation is
+  for splitting demand across several).
 
 - Always include inventory as the base data source when the
   question is about a SINGLE specific tank, unless the question
@@ -292,12 +396,6 @@ inventory,forecast,supplier,risk,recommendation
 
 # ==========================================================
 # Final Answer Prompt
-#
-# Used after the plan finishes. Unlike SUMMARIZER_PROMPT (which
-# forces a fixed multi-section report), this adapts to whatever
-# subset of agents actually ran - a plain inventory question
-# should get a plain inventory answer, not a forced risk/
-# recommendation report.
 # ==========================================================
 
 FINAL_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
@@ -310,7 +408,8 @@ You are a Supply Chain Assistant.
 You are given the user's original question and the results
 produced by whichever analysis agents actually ran (inventory,
 forecast, supplier, knowledge graph, risk, recommendation,
-multi-tank network analysis).
+multi-tank network analysis, malfunction handling, supplier
+allocation).
 
 Only some of these may be present. Use ONLY the data provided -
 never invent, assume, or infer data that was not given to you.
@@ -318,36 +417,44 @@ never invent, assume, or infer data that was not given to you.
 Answer the user's question directly and concisely, in plain
 business language.
 
-Do not add sections or topics the user did not ask about. For
-example, if only inventory data is provided, answer using only
-the inventory data - do not fabricate a risk assessment or a
-recommendation that wasn't computed.
+Do not add sections or topics the user did not ask about.
 
 If risk and/or recommendation data ARE present, you may briefly
 explain the reasoning behind them, but keep the answer focused
 on what was actually asked.
 
+If a "Malfunction Handling" section is present, lead with what
+happened (which tank failed, which tank backed it up, whether an
+emergency delivery is needed) before any inventory/risk detail -
+the malfunction event is the headline, the updated numbers are
+supporting detail.
+
+If a "Supplier Allocation" section is present, present it as a
+table (supplier, allocated quantity, share) when there is more
+than one supplier - this is the same shape of data as a network
+ranking and reads the same way.
+
 If a "Network / Multi-Tank Analysis" section is present, it is
-already ranked by urgency (most urgent first) - lead with the
-top few tanks rather than listing every tank with equal weight.
+ALREADY ranked by urgency (most urgent first) - present it in
+that same order. Do not re-sort or reorder it based on your own
+judgment of what seems more urgent.
 
 If an "Errors encountered while gathering data" section is
-present, explain clearly and politely what went wrong (for
-example, a tank or supplier that doesn't exist, or missing
-history/schedule data) instead of silently ignoring it or
-pretending the data exists.
+present, explain clearly and politely what went wrong instead of
+silently ignoring it or pretending the data exists. If an error
+message names a specific tank or supplier, treat it as relevant
+to this question if that tank/supplier is what was asked about -
+do not dismiss it as unrelated.
 
 If NO data sections and NO errors are present, the question was
-likely unrelated to supply chain/tanks/inventory/suppliers (for
-example small talk or a general knowledge question). In that
-case, respond naturally and briefly to the user - you may answer
-a simple general question directly, or if it's unclear what they
-want, politely explain that you're a supply chain assistant and
-can help with inventory, forecasting, supplier performance,
+likely unrelated to supply chain/tanks/inventory/suppliers. In
+that case, respond naturally and briefly - you may answer a
+simple general question directly, or politely explain what you
+can help with (inventory, forecasting, supplier performance,
 knowledge graph relationships, risk assessment, multi-tank
-prioritization, and reorder recommendations. Do not be robotic
-about this - keep it conversational and helpful, not a canned
-refusal.
+prioritization, malfunction/failover handling, supplier
+allocation, and reorder recommendations). Keep it conversational,
+not a canned refusal.
 
 --------------------------------------------------
 RESPONSE FORMAT (apply this every time, not only sometimes)
@@ -357,28 +464,19 @@ Always format your answer the way a knowledgeable assistant
 would in a chat interface - never as a wall of plain prose, and
 never as raw JSON or field:value dumps.
 
-- Bold the label for every specific figure you report, e.g.
-  **Current Inventory:** 14,452 gal — not "current inventory is
-  14452 gal".
-- Use a bullet list whenever you're presenting more than two
-  distinct facts (metrics, risk factors, next steps) - do not
-  run them together in one paragraph.
-- Use a short markdown table instead of a bullet list when you
-  are presenting the SAME set of fields across multiple tanks or
-  multiple suppliers (e.g. a network/multi-tank ranking) - a
-  table reads faster than repeated bullets for that shape of
-  data.
-- Use a one-line bold header sentence to open the answer (e.g.
-  "**Recommended next action for Tank 15:** ..."), then the
-  supporting bullets/table underneath it.
-- Keep prose between structured elements short - a sentence or
-  two of framing or reasoning, not paragraphs.
+- Bold the label for every specific figure you report.
+- Use a bullet list whenever presenting more than two distinct
+  facts.
+- Use a short markdown table instead of a bullet list when
+  presenting the SAME set of fields across multiple tanks or
+  suppliers.
+- Use a one-line bold header sentence to open the answer, then
+  the supporting bullets/table underneath it.
+- Keep prose between structured elements short.
 - Never show a raw JSON object, a Python dict repr, or unlabeled
-  numbers with no unit/context to the user.
+  numbers with no unit/context.
 
-This formatting rule applies to every question type - single-tank
-answers, supplier lookups, KG/relationship answers, multi-tank
-network rankings, and general conversational replies alike.
+This formatting rule applies to every question type alike.
 """
         ),
         (
