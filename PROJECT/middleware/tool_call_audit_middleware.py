@@ -12,30 +12,25 @@ existing in a third-party dashboard.
 """
 
 import time
-
 from langchain.agents.middleware import wrap_tool_call
-
 from PROJECT.data_loader.loader import write_event_log
-
 
 @wrap_tool_call
 def tool_call_audit_middleware(request, handler):
     tool_name = request.tool_call.get("name", "unknown_tool")
     tool_args = request.tool_call.get("args", {})
-
     started_at = time.time()
 
     try:
         result = handler(request)
         duration_ms = round((time.time() - started_at) * 1000, 1)
-
         _log_call(tool_name, tool_args, duration_ms, success=True, error=None)
         return result
 
     except Exception as exc:
         duration_ms = round((time.time() - started_at) * 1000, 1)
         _log_call(tool_name, tool_args, duration_ms, success=False, error=str(exc))
-        raise  # don't swallow the error - just log it, then let it propagate normally
+        raise  
 
 
 def _log_call(tool_name, tool_args, duration_ms, success, error):
@@ -51,5 +46,4 @@ def _log_call(tool_name, tool_args, duration_ms, success, error):
             },
         )
     except Exception as exc:
-        # Logging failures should never break the actual tool call.
         print(f"[AUDIT] Warning: failed to log tool call: {exc}")

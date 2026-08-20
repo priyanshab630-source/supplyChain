@@ -44,18 +44,13 @@ class AllocationAgent:
                 f"({', '.join(unavailable_suppliers)}) - no allocation is possible."
             )
 
-        # Renormalize shares across only the available suppliers, so
-        # an unavailable supplier's share gets redistributed
-        # proportionally rather than the total simply shrinking.
         total_available_share = available_df["contract_share"].sum()
         available_df["normalized_share"] = available_df["contract_share"] / total_available_share
 
         lines = []
 
         for _, row in available_df.iterrows():
-
             allocated_qty = total_qty_needed * row["normalized_share"]
-
             lines.append(
                 SupplierAllocationLine(
                     supplier_name=row["supplier_name"],
@@ -65,8 +60,6 @@ class AllocationAgent:
                 )
             )
 
-        # Rank highest-allocated first, so the answer naturally leads
-        # with whoever's carrying the most of this order.
         lines.sort(key=lambda line: -line.allocated_qty)
 
         reasoning_parts = [

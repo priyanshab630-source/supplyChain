@@ -52,17 +52,9 @@ def build_plan(question: str) -> list[str]:
 
     plan = unique_plan
 
-    # Recommendation requires Risk - a genuine hard dependency, a
-    # recommendation cannot be produced without a risk score.
     if "recommendation" in plan and "risk" not in plan:
         idx = plan.index("recommendation")
         plan.insert(idx, "risk")
-
-    # Malfunction must run BEFORE inventory/forecast/risk - if a
-    # malfunction is being reported in the same question that also
-    # asks for inventory/risk/recommendation on the affected tank(s),
-    # the malfunction needs to update tank_status (and the surge
-    # multiplier) before any of those other agents read it.
     if "malfunction" in plan:
         plan = ["malfunction"] + [a for a in plan if a != "malfunction"]
 

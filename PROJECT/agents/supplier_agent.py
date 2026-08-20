@@ -5,12 +5,6 @@ from PROJECT.models.supplier_models import SupplierResult
 from langsmith import traceable
 
 
-# Words that commonly follow "supplier" in ordinary phrasing but are
-# NOT part of an actual supplier name - e.g. "Tank 1 supplier
-# details" should NOT extract "Supplier details". Without this, that
-# false match cascades: the fast path in nodes.py builds a synthetic
-# sentence from the wrong name, and this same regex mangles it a
-# second time on re-parse.
 SUPPLIER_NAME_STOPWORDS = (
     r"details?|info(?:rmation)?|data|reliability|performance|"
     r"schedule|deliver(?:y|ies)|shipments?|dependency|risk"
@@ -32,22 +26,9 @@ class SupplierAgent:
     def get_supplier_schedule(self, supplier_name):
 
         target = self._normalize(supplier_name)
+        supplier_df = (self.Schedule_df[self.Schedule_df["Suppplier_name"].astype(str).str.strip().str.lower() == target].copy())
 
-        supplier_df = (
-            self.Schedule_df[
-                self.Schedule_df["Suppplier_name"]
-                .astype(str)
-                .str.strip()
-                .str.lower()
-                == target
-            ]
-            .copy()
-        )
-
-        supplier_df["Shipment_qty"] = pd.to_numeric(
-            supplier_df["Shipment_qty"],
-            errors="coerce"
-        )
+        supplier_df["Shipment_qty"] = pd.to_numeric(supplier_df["Shipment_qty"],errors="coerce")
 
         if supplier_df.empty:
             return None
@@ -55,54 +36,29 @@ class SupplierAgent:
         return supplier_df
 
     def get_supplier_tanks(self, supplier_name):
-
         target = self._normalize(supplier_name)
-
-        names = (
-            self.Info_df["Suppplier_name"]
-            .astype(str)
-            .str.strip()
-            .str.lower()
-        )
-
-        tanks = (
-            self.Info_df[
-                names.str.contains(
-                    re.escape(target),
-                    na=False
-                )
-            ]["tank_id"]
-            .unique()
-            .tolist()
-        )
-
+        names = (self.Info_df["Suppplier_name"].astype(str).str.strip().str.lower())
+        tanks = ( self.Info_df[names.str.contains(re.escape(target),na=False)]["tank_id"].unique().tolist())
         return tanks
 
     def get_supplier_count(self, supplier_name):
-
         tanks = self.get_supplier_tanks(supplier_name)
         return len(tanks)
 
     def get_supplier_for_tank(self, tank_id):
-
-        rows = self.Info_df[
-            self.Info_df["tank_id"] == tank_id
-        ]
+        rows = self.Info_df[self.Info_df["tank_id"] == tank_id]
 
         if rows.empty:
             return None
 
         supplier_field = rows.iloc[0].get("Suppplier_name")
-
         if pd.isna(supplier_field) or not str(supplier_field).strip():
             return None
 
         first_supplier = str(supplier_field).split(",")[0].strip()
-
         return first_supplier
 
     def extract_tank_id(self, question: str):
-
         match = re.search(r"tank\s*(\d+)", question, re.IGNORECASE)
 
         if match:
@@ -111,38 +67,18 @@ class SupplierAgent:
         return None
 
     def calculate_total_shipped_qty(self, Schedule_df):
-        return (
-            Schedule_df["Shipment_qty"]
-            .fillna(0)
-            .sum()
-        )
+        return (Schedule_df["Shipment_qty"].fillna(0).sum())
 
     def calculate_average_shipment(self, Schedule_df):
-        avg = (
-            Schedule_df["Shipment_qty"]
-            .dropna()
-            .mean()
-        )
-
+        avg = ( Schedule_df["Shipment_qty"].dropna().mean())
         return 0 if pd.isna(avg) else avg
 
     def detect_missed_shipments(self, Schedule_df):
-        return (
-            Schedule_df["Shipment_qty"]
-            .isna()
-            .sum()
-        )
+        return (Schedule_df["Shipment_qty"].isna().sum())
 
     def calculate_fill_rate(self, Schedule_df):
-
         total_shipments = len(Schedule_df)
-
-        completed_shipments = (
-            Schedule_df["Shipment_qty"]
-            .notna()
-            .sum()
-        )
-
+        completed_shipments = (Schedule_df["Shipment_qty"].notna().sum())
         if total_shipments == 0:
             return 0
 
@@ -150,11 +86,7 @@ class SupplierAgent:
 
     def calculate_supplier_reliability(self, Schedule_df):
         total_shipments = len(Schedule_df)
-        successful_shipments = (
-            Schedule_df["Shipment_qty"]
-            .notna()
-            .sum()
-        )
+        successful_shipments = (Schedule_df["Shipment_qty"].notna().sum())
 
         if total_shipments == 0:
             return 0
@@ -162,19 +94,10 @@ class SupplierAgent:
         return (successful_shipments / total_shipments) * 100
 
     def identify_single_source_risk(self, supplier_name):
-
         target = self._normalize(supplier_name)
+        names = (self.Info_df["Suppplier_name"].astype(str).str.strip().str.lower())
 
-        names = (
-            self.Info_df["Suppplier_name"]
-            .astype(str)
-            .str.strip()
-            .str.lower()
-        )
-
-        supplier_rows = self.Info_df[
-            names.str.contains(re.escape(target), na=False)
-        ]
+        supplier_rows = self.Info_df[names.str.contains(re.escape(target), na=False)]
 
         if supplier_rows.empty:
             return True
@@ -306,23 +229,16 @@ class SupplierAgent:
         print("Running Supplier Agent...")
 
         supplier_name = self.extract_supplier(question)
-
         if not supplier_name:
-
             tank_id = self.extract_tank_id(question)
-
             if tank_id:
-
                 resolved = self.get_supplier_for_tank(tank_id)
-
                 if resolved is None:
                     raise ValueError(
                         f"{tank_id} does not have a supplier "
                         "assigned in the current data."
                     )
-
                 supplier_name = resolved
-
             else:
                 raise ValueError(
                     "Please specify a supplier or a tank. "

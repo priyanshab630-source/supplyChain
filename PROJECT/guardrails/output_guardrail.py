@@ -21,7 +21,7 @@ Two different failure modes, handled deliberately differently:
 import re
 
 _SECRET_PATTERNS = [
-    r"neo4j://[^\s]*:[^\s]*@",   # credentials embedded in a connection string
+    r"neo4j://[^\s]*:[^\s]*@",   
     r"password\s*[:=]\s*['\"]?\S+",
     r"Traceback \(most recent call last\)",
     r"api[_-]?key\s*[:=]\s*['\"]?\S+",

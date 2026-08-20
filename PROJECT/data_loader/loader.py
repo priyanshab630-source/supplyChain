@@ -21,13 +21,9 @@ _cache = {}
 
 
 def _load(table_name: str, force_refresh: bool = False) -> pd.DataFrame:
-
     if force_refresh or table_name not in _cache:
         _cache[table_name] = pd.read_sql_table(table_name, data_engine)
 
-    # Return a copy - callers (InventoryAgent, SupplierAgent, ...)
-    # add/mutate columns on the DataFrames they're given (delta,
-    # consumption, shipment_qty) and must not corrupt the shared cache.
     return _cache[table_name].copy()
 
 
@@ -51,9 +47,6 @@ def refresh_all():
     _cache.clear()
 
 
-
-# new addition: tank_status table, which is a live operational-status table
-
 _TANK_STATUS_DDL = """
 CREATE TABLE IF NOT EXISTS tank_status (
     tank_id TEXT PRIMARY KEY,
@@ -64,26 +57,18 @@ CREATE TABLE IF NOT EXISTS tank_status (
 )
 """
  
-_UNSET = object()  # sentinel: "caller isn't making a claim about compensating_for"
+_UNSET = object()  
 
 
 def _ensure_tank_status_table():
     with data_engine.begin() as conn:
         conn.execute(text(_TANK_STATUS_DDL))
- 
-    # Separate transaction on purpose: this ALTER fails with "column
-    # already exists" on every call after the first, which is
-    # expected - but if it ran inside the SAME begin() block as the
-    # CREATE TABLE above, Postgres would abort that WHOLE transaction
-    # on the error (a failed statement poisons the rest of the
-    # transaction until rollback), silently undoing the CREATE TABLE
-    # too. Running it in its own connection means the expected
-    # failure here can't touch anything else.
+
     try:
         with data_engine.begin() as conn:
             conn.execute(text("ALTER TABLE tank_status ADD COLUMN compensating_for TEXT"))
     except Exception:
-        pass  # column already exists - migration already applied
+        pass  
  
  
 def load_tank_status(force_refresh: bool = False) -> pd.DataFrame:
@@ -117,8 +102,7 @@ def write_tank_status(
  
     with data_engine.begin() as conn:
         if compensating_for is _UNSET:
-            conn.execute(
-                text(
+            conn.execute(text(
                     """
                     INSERT INTO tank_status (tank_id, status, surge_multiplier, compensating_for, updated_at)
                     VALUES (:tank_id, :status, :surge_multiplier, NULL, :updated_at)
@@ -136,8 +120,7 @@ def write_tank_status(
                 },
             )
         else:
-            conn.execute(
-                text(
+            conn.execute(text(
                     """
                     INSERT INTO tank_status (tank_id, status, surge_multiplier, compensating_for, updated_at)
                     VALUES (:tank_id, :status, :surge_multiplier, :compensating_for, :updated_at)
@@ -169,18 +152,12 @@ def get_backup_for(tank_id: str):
     status_df = load_tank_status(force_refresh=True)
  
     if "compensating_for" not in status_df.columns:
-        return None  # pre-migration cache read; the ALTER above will have already run by now, this just guards a stale in-memory copy
+        return None 
  
     rows = status_df.loc[status_df["compensating_for"] == tank_id, "tank_id"]
     return rows.iloc[0] if not rows.empty else None
 
-# ============================================================
-# ADD THIS TO loader.py (same file that already has
-# _TANK_STATUS_DDL / load_tank_status / write_tank_status).
-# It needs `text` from sqlalchemy and `datetime` imported at the top
-# of loader.py - you already have both for tank_status, so no new
-# imports should be required.
-# ============================================================
+
 
 _SHIPMENT_STATUS_DDL = """
 CREATE TABLE IF NOT EXISTS shipment_status (

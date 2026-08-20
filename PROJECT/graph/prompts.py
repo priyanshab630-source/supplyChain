@@ -1,8 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 
-# ==========================================================
-# Supervisor Planner Prompt
-# ==========================================================
+
 
 PLANNER_PROMPT = ChatPromptTemplate.from_messages(
     [

@@ -35,7 +35,6 @@ Or import directly:
 
 import argparse
 import uuid
-
 from PROJECT.data_loader.loader import (
     load_tank_master_data,
     write_tank_status,
@@ -72,21 +71,12 @@ def _to_loggable(obj):
     return obj.model_dump(mode="json") if hasattr(obj, "model_dump") else obj
 
 
-# ---------------------------------------------------------------
-# Tank malfunction / recovery
-# ---------------------------------------------------------------
-
 def simulate_tank_malfunction(tank_id: str) -> dict:
     print(f"\n[SIMULATOR] Injecting malfunction: {tank_id}")
 
     effect = malfunction_agent.report_malfunction(tank_id)
     _log_event("tank_malfunction", {"tank_id": tank_id, "effect": _to_loggable(effect)})
     print(f"[SIMULATOR] {effect.reasoning}")
-
-    # Ask about whichever tank is now actually carrying the load -
-    # this is what proves the surge propagated through inventory ->
-    # risk -> recommendation automatically (P6), not just that
-    # report_malfunction() itself ran.
     target_tank = effect.backup_tank_id or tank_id
     follow_up = f"What is the current risk and recommendation for {target_tank}?"
     answer = _run_pipeline(follow_up)
@@ -117,9 +107,7 @@ def simulate_tank_recovery(tank_id: str, backup_tank_id: str = None) -> dict:
         rows = tank_master_df.loc[tank_master_df["tank_id"] == tid, "default_role"]
         return rows.iloc[0] if not rows.empty and rows.iloc[0] else fallback
 
-    write_tank_status(
-        tank_id, status=_default_role(tank_id, "ONLINE"), surge_multiplier=1.0, compensating_for=None
-    )
+    write_tank_status( tank_id, status=_default_role(tank_id, "ONLINE"), surge_multiplier=1.0, compensating_for=None)
     _log_event("tank_recovery", {"tank_id": tank_id})
 
     if backup_tank_id:
@@ -140,11 +128,6 @@ def simulate_tank_recovery(tank_id: str, backup_tank_id: str = None) -> dict:
         "backup_tank_id": backup_tank_id,
         "pipeline_answer": answer,
     }
-
-
-# ---------------------------------------------------------------
-# Shipment delay / recovery / supplier outage
-# ---------------------------------------------------------------
 
 def simulate_shipment_delay(supplier_name: str, delay_days: int, tank_id: str = None) -> dict:
     print(f"\n[SIMULATOR] Delaying {supplier_name}'s shipment by {delay_days} day(s)"
@@ -225,26 +208,17 @@ def simulate_supplier_outage(supplier_name: str) -> dict:
     }
 
 
-# ---------------------------------------------------------------
-# History
-# ---------------------------------------------------------------
-
 def print_history(limit: int = 20):
     df = load_event_log(force_refresh=True)
-
     if df.empty:
         print("No events logged yet.")
         return
 
     df = df.sort_values("created_at", ascending=False).head(limit)
-
     for _, row in df.iterrows():
         print(f"[{row['created_at']}] {row['event_type']}: {row['details']}")
 
 
-# ---------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(description="Simulate supply-chain events end-to-end.")

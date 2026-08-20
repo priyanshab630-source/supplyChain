@@ -21,9 +21,7 @@ from PROJECT.data_loader.loader import write_tank_status
 
 
 def run():
-
     tank_df = pd.read_sql_table("tank_master", data_engine)
-
     if "default_role" not in tank_df.columns:
         raise RuntimeError(
             "tank_master has no default_role column yet - run "
@@ -31,9 +29,7 @@ def run():
         )
 
     count = 0
-
     for _, row in tank_df.iterrows():
-
         status = row.get("default_role") or "ONLINE"
         write_tank_status(row["tank_id"], status=status, surge_multiplier=1.0)
         count += 1

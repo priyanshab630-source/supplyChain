@@ -15,7 +15,6 @@ remembered to call this by hand.
 
 def normalize_tank_id(tank_id: str) -> str:
     tank_id = str(tank_id).strip()
-
     if tank_id.isdigit():
         tank_id = f"Tank {tank_id}"
 

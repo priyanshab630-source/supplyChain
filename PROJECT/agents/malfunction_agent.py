@@ -29,13 +29,9 @@ from PROJECT.tools.tank_status_tools import apply_surge_adjustment
 from PROJECT.models.malfunction_models import MalfunctionResult
 
 
-# A failed tank's load doesn't vanish - it lands on whoever's still
-# online. This is a placeholder ratio until Intel provides a real
-# load-transfer figure - see the README's business-context section.
 DEFAULT_SURGE_MULTIPLIER = 1.5
 
-# Below this many days of surged cover, an emergency delivery is
-# recommended rather than a routine reorder.
+
 EMERGENCY_DAYS_OF_COVER_THRESHOLD = 2.0
 
 class MalfunctionAgent:
@@ -60,9 +56,7 @@ class MalfunctionAgent:
         status_df = load_tank_status()
 
         for record in records:
-
             candidate = record.get("backup_tank_id")
-
             if candidate is None:
                 continue
 
@@ -76,11 +70,8 @@ class MalfunctionAgent:
 
     @traceable(name="MalfunctionAgent.report_malfunction", run_type="chain")
     def report_malfunction(self, tank_id: str) -> MalfunctionResult:
-
-        # 1. Mark the failed tank.
         write_tank_status(tank_id, status="MALFUNCTION", surge_multiplier=1.0)
 
-        # 2. Find a usable backup.
         backup_tank_id = self._find_backup_tank(tank_id)
 
         if backup_tank_id is None:
@@ -99,27 +90,18 @@ class MalfunctionAgent:
                 ),
             )
 
-        # 3 & 4. Activate the backup and apply surge.
         status_df = load_tank_status()
         backup_row = status_df.loc[status_df["tank_id"] == backup_tank_id]
         current_backup_status = backup_row.iloc[0]["status"] if not backup_row.empty else "STANDBY"
 
-        # ALWAYS_ONLINE tanks don't need a status change - they're
-        # already online - only the surge applies.
         new_status = "ONLINE" if current_backup_status != "ALWAYS_ONLINE" else "ALWAYS_ONLINE"
 
         write_tank_status(
             backup_tank_id,
             status=new_status,
             surge_multiplier=DEFAULT_SURGE_MULTIPLIER,
-            compensating_for=tank_id,  # records the link so recovery can look it up automatically instead of requiring it be passed in
+            compensating_for=tank_id,  
         )
-
-        # 5. Recalculate days of cover under the surged rate, right
-        # now, via the single shared surge function - not a hand-
-        # rolled copy of its math. tank_status already has the new
-        # surge_multiplier written (previous step), so
-        # apply_surge_adjustment picks it up automatically.
         try:
             inventory = inventory_engine.run(f"show inventory of {backup_tank_id}")
             inventory = apply_surge_adjustment(inventory)

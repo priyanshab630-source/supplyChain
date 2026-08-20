@@ -28,18 +28,10 @@ class SupplyChainState(MessagesState):
     shipment_delay: Optional[ShipmentDelayResult]
     network_results: Optional[list[dict]]
     network_scope: Optional[str]
-    # P2: result of MalfunctionAgent.report_malfunction() - which
-    # tank failed, which tank backed it up, the surge applied, and
-    # whether an emergency delivery is needed.
     malfunction: Optional[MalfunctionResult]
-    
-    # P3: result of AllocationAgent.allocate() - how much of a gas
-    # each contracted supplier should provide for the current demand.
     allocation: Optional[AllocationResult]
     final_answer: Optional[str]
-
     errors: list[str]
-
     required_agents: list[str]
     completed_agents: list[str]
     next_agent: str

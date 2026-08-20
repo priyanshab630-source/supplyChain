@@ -8,7 +8,7 @@ def get_groq_model():
 
     api_key = os.getenv("GROQ_API_KEY")
 
-    print(api_key)      # temporary debugging
+    print(api_key)     
 
     return ChatGroq(
         model="openai/gpt-oss-120b",

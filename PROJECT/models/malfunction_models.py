@@ -4,7 +4,6 @@ from pydantic import BaseModel
 
 
 class MalfunctionResult(BaseModel):
-
     failed_tank_id: str
     backup_tank_id: Optional[str] = None
     backup_activated: bool = False

@@ -17,9 +17,7 @@ calling loop.
 """
 
 from langchain.agents.middleware import wrap_tool_call
-
 from PROJECT.tools.tank_id_utils import normalize_tank_id
-
 
 @wrap_tool_call
 def tank_id_normalizer_middleware(request, handler):

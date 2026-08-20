@@ -2,7 +2,6 @@ from typing import Optional
 from pydantic import BaseModel
 
 class InventoryResult(BaseModel):
-
     gas: str
     tank_id: str
     current_inventory: Optional[float] = None

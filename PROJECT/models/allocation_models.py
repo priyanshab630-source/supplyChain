@@ -2,7 +2,6 @@ from pydantic import BaseModel
 
 
 class SupplierAllocationLine(BaseModel):
-
     supplier_name: str
     contract_share: float
     allocated_qty: float
@@ -10,7 +9,6 @@ class SupplierAllocationLine(BaseModel):
 
 
 class AllocationResult(BaseModel):
-
     gas: str
     total_qty_needed: float
     allocations: list[SupplierAllocationLine]

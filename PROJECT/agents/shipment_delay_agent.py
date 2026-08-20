@@ -38,30 +38,18 @@ from PROJECT.models.shipment_models import ShipmentDelayResult, TankDelayImpact
 from langsmith import traceable
 
 
-# A tank whose surged days_of_cover is at or below the delay length
-# is judged to run dry before the delayed shipment now arrives.
+
 DELAY_RISK_BUFFER_DAYS = 0.0
-
-# Extra cushion (days) added on top of a KNOWN delay length when
-# sizing the reallocated order.
 REORDER_BUFFER_DAYS = 2
-
-# Order-sizing window for a total outage, where there's no delay
-# length to add a buffer to. Matches RecommendationAgent's own
-# 14-day routine-reorder target, so an outage-driven order and a
-# normal reorder are sized on the same logic, not two different
-# philosophies.
 OUTAGE_REORDER_TARGET_DAYS = 14
 
 class ShipmentDelayAgent:
 
     def _affected_tanks(self, supplier_name: str, tank_id: str = None) -> list:
-
         if tank_id:
             return [tank_id]
 
         tanks = supplier_engine.get_supplier_tanks(supplier_name)
-
         if not tanks:
             raise ValueError(
                 f"No tanks found for supplier '{supplier_name}' - check the "
@@ -72,7 +60,6 @@ class ShipmentDelayAgent:
         return tanks
 
     def _assess_tank_for_delay(self, tank_id: str, delay_days: int) -> TankDelayImpact:
-
         try:
             inventory = inventory_engine.run(f"show inventory of {tank_id}")
             inventory = apply_surge_adjustment(inventory)
@@ -86,7 +73,6 @@ class ShipmentDelayAgent:
             )
 
         days_of_cover = inventory.days_of_cover
-
         will_stockout = (
             days_of_cover is not None
             and days_of_cover != float("inf")
@@ -148,13 +134,7 @@ class ShipmentDelayAgent:
 
         return max(target_inventory - current, 0.0)
 
-    def _build_alternate_allocation(
-        self,
-        supplier_name: str,
-        at_risk: list,
-        target_days: float,
-        situation_label: str,
-    ):
+    def _build_alternate_allocation(self, supplier_name: str, at_risk: list, target_days: float, situation_label: str,):
         """
         Tries to reallocate the at-risk tanks' gas order across the
         supplier's remaining contracted partners. Returns
@@ -204,17 +184,10 @@ class ShipmentDelayAgent:
             )
 
     @traceable(name="ShipmentDelayAgent.report_delay", run_type="chain")
-    def report_delay(
-        self,
-        supplier_name: str,
-        delay_days: int,
-        tank_id: str = None,
-    ) -> ShipmentDelayResult:
+    def report_delay(self, supplier_name: str, delay_days: int, tank_id: str = None,) -> ShipmentDelayResult:
 
         affected_tanks = self._affected_tanks(supplier_name, tank_id)
-
         impacts = []
-
         for t_id in affected_tanks:
             impact = self._assess_tank_for_delay(t_id, delay_days)
             impacts.append(impact)
@@ -280,7 +253,7 @@ class ShipmentDelayAgent:
                 status="OUTAGE",
             )
 
-        at_risk = impacts  # every tank, by definition, for an outage
+        at_risk = impacts  
 
         situation_label = (
             f"a total outage at {supplier_name} (no known delivery date - order "

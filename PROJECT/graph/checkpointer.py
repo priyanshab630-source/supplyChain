@@ -31,14 +31,7 @@ import sqlite3
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./supply_chain.db")
-
-# LangGraph's Postgres checkpointer uses psycopg directly and wants a
-# plain postgresql://... URI - NOT SQLAlchemy's postgresql+psycopg2://
-# style suffix. If your DATABASE_URL already uses a SQLAlchemy driver
-# suffix, set LANGGRAPH_DB_URL separately rather than relying on
-# string surgery to convert it (safer than guessing at URL parsing).
 CHECKPOINT_DB_URL = os.getenv("LANGGRAPH_DB_URL", DATABASE_URL)
-
 _checkpointer_instance = None
 
 
@@ -57,19 +50,11 @@ def get_checkpointer():
         return _checkpointer_instance
 
     if CHECKPOINT_DB_URL.startswith("sqlite"):
-        
-
         db_path = CHECKPOINT_DB_URL.replace("sqlite:///", "")
-        # check_same_thread=False for the same reason
-        # backend/database.py already sets it on the SQLAlchemy side -
-        # FastAPI can hit this from more than one thread.
         conn = sqlite3.connect(db_path, check_same_thread=False)
         checkpointer = SqliteSaver(conn)
-        checkpointer.setup()  # creates the checkpoint tables if they don't exist yet - safe every startup
-
+        checkpointer.setup()  
     elif CHECKPOINT_DB_URL.startswith("postgresql://"):
-        
-
         pool = ConnectionPool(
             conninfo=CHECKPOINT_DB_URL,
             max_size=20,
@@ -77,7 +62,6 @@ def get_checkpointer():
         )
         checkpointer = PostgresSaver(pool)
         checkpointer.setup()
-
     else:
         raise ValueError(
             f"Unsupported DATABASE_URL/LANGGRAPH_DB_URL scheme for checkpointing: "

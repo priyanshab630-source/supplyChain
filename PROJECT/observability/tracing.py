@@ -52,8 +52,6 @@ def build_run_config(thread_id: str, question: str = None, source: str = "api", 
     }
 
     if question:
-        # Truncated so a very long question doesn't make LangSmith's
-        # run list unreadable - the full question is still in metadata.
         config["run_name"] = f"{source}: {question[:60]}"
 
     return config

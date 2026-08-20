@@ -74,16 +74,12 @@ def _score(answer_text: str, expected_tank_ids: list[str]) -> bool:
 
 
 def run_condition(label: str) -> dict:
-
     agent = KGAgent()
     correct = 0
-
     for scenario in SCENARIOS:
-
         result = agent.run(scenario["question"])
         is_correct = _score(result.insights, scenario["expected_tank_ids"])
         correct += int(is_correct)
-
         print(f"[{label}] Q: {scenario['question']}")
         print(f"[{label}] Correct: {is_correct}")
         print(f"[{label}] Answer: {result.insights[:200]}...\n")
@@ -94,7 +90,6 @@ def run_condition(label: str) -> dict:
 
 
 def run_ablation():
-
     print("=" * 60)
     print("Ensuring BACKS_UP relationships exist for Condition A...")
     print("=" * 60)

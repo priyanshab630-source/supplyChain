@@ -20,7 +20,7 @@ import pandas as pd
 
 from PROJECT.database.postgres import data_engine
 
-# Business rule from the spec:
+# Business rule:
 # - Gas A: always-on pair, no standby
 # - Gas C: all tanks always online simultaneously
 # - Gas B/D/E/F/G: one online, one standby per pair
@@ -34,25 +34,16 @@ def _assign_switchover_groups(tank_df: pd.DataFrame) -> pd.DataFrame:
     tank_df["default_role"] = None
 
     for gas, group_df in tank_df.groupby("gas"):
-
         tank_ids = group_df["tank_id"].tolist()
         always_online = gas in ALWAYS_ONLINE_GASES
-
-        # Dummy pairing by CSV order, two tanks per group. Replace
-        # with the real switchover_group mapping once Intel provides
-        # it - this is the one part of this file that's a placeholder.
         for i in range(0, len(tank_ids), 2):
-
             pair = tank_ids[i:i + 2]
             group_name = f"{gas.replace(' ', '')}-Group-{i // 2 + 1}"
-
             for j, tank_id in enumerate(pair):
-
                 role = (
                     "ALWAYS_ONLINE" if always_online
                     else ("ONLINE" if j == 0 else "STANDBY")
                 )
-
                 tank_df.loc[tank_df["tank_id"] == tank_id, "switchover_group"] = group_name
                 tank_df.loc[tank_df["tank_id"] == tank_id, "default_role"] = role
 
@@ -60,22 +51,14 @@ def _assign_switchover_groups(tank_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _assign_contract_shares(info_df: pd.DataFrame, tank_df: pd.DataFrame) -> pd.DataFrame:
-
     merged = info_df.merge(tank_df[["tank_id", "gas"]], on="tank_id", how="left")
-
     rows = []
-
     for gas, group_df in merged.groupby("gas"):
-
         suppliers = group_df["Suppplier_name"].dropna().unique().tolist()
-
         if not suppliers:
             continue
 
-        # Dummy equal split across suppliers actually serving this
-        # gas today - replace with real contracted percentages.
         share = round(1.0 / len(suppliers), 4)
-
         for supplier in suppliers:
             rows.append({"gas": gas, "supplier_name": supplier, "contract_share": share})
 

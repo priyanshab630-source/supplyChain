@@ -76,28 +76,19 @@ def run_graph(question: str, thread_id: str = "default", source: str = "cli"):
 
 
     accumulated_state = dict(initial_state)
-
     for event in graph.stream(initial_state, config=config):
-
         print("=" * 80)
         print(event)
-
         for node_name, node_output in event.items():
-
             if not isinstance(node_output, dict):
                 continue
-
             for key, value in node_output.items():
-
                 if key == "messages":
-
                     accumulated_state["messages"] = add_messages(
                         accumulated_state.get("messages", []),
                         value,
                     )
-
                 else:
-
                     accumulated_state[key] = value
 
     return accumulated_state

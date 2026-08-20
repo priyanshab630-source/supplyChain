@@ -2,7 +2,6 @@ from pydantic import BaseModel
 
 
 class Recommendation(BaseModel):
-
     tank_id: str
     recommended_action: str
     recommended_supplier: str | None

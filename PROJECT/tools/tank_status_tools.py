@@ -13,34 +13,27 @@ unchanged.
 """
 
 from datetime import datetime, timedelta
-
 from PROJECT.data_loader.loader import load_tank_status
 from PROJECT.models.inventory_models import InventoryResult
 from PROJECT.models.consumption_forecast_models import ConsumptionForecastResult
 
 
 def get_tank_status_row(tank_id: str):
-
     status_df = load_tank_status()
     row = status_df.loc[status_df["tank_id"] == tank_id]
-
     return row.iloc[0].to_dict() if not row.empty else None
 
 
 def _get_surge_multiplier(tank_id: str) -> float:
-
     status = get_tank_status_row(tank_id)
-
     if not status:
         return 1.0
 
     surge = status.get("surge_multiplier")
-
     return surge if surge is not None else 1.0
 
 
 def apply_surge_adjustment(result: InventoryResult) -> InventoryResult:
-
     surge = _get_surge_multiplier(result.tank_id)
 
     if surge == 1.0:
@@ -57,9 +50,7 @@ def apply_surge_adjustment(result: InventoryResult) -> InventoryResult:
 
 
 def apply_forecast_surge_adjustment(result: ConsumptionForecastResult) -> ConsumptionForecastResult:
-
     surge = _get_surge_multiplier(result.tank_id)
-
     if surge == 1.0:
         return result
 

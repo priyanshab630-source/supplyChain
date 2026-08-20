@@ -31,7 +31,6 @@ class InventoryAgent:
 
     def calculate_avg_consumption(self, tank_df):
         avg_hourly = (tank_df["consumption"].dropna().mean())
-
         if avg_hourly != avg_hourly:  
             avg_hourly = 0
 
@@ -184,7 +183,6 @@ class InventoryAgent:
             predicted_stockout_date=stockout_date,
         )
 
-    # Main Agent Workflow
     @traceable(name="InventoryAgent.run", run_type="chain")
     def run(self, question: str):
         tank_id = self.extract_tank_id(question)

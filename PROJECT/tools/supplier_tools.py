@@ -1,14 +1,11 @@
 from typing import Optional
-
 from pydantic import BaseModel, Field
 from langchain.tools import tool
-
 from PROJECT.agents.supplier_agent import SupplierAgent
 from PROJECT.data_loader.loader import load_schedule_data, load_info_data
 
 Schedule_df = load_schedule_data()
 Info_df = load_info_data()
-
 supplier_agent = SupplierAgent(Schedule_df, Info_df)
 
 
@@ -53,18 +50,15 @@ def supplier_tool(
 
     if not supplier_name and tank_id:
         supplier_name = supplier_agent.get_supplier_for_tank(tank_id)
-
         if supplier_name is None:
             return {
                 "error": f"{tank_id} does not have a supplier assigned in the current data."
             }
-
     if not supplier_name:
         return {"error": "No supplier name or tank id was provided."}
 
     try:
         result = supplier_agent.run_for_supplier(supplier_name)
         return result.model_dump(mode="json")
-
     except Exception as exc:
         return {"error": str(exc)}

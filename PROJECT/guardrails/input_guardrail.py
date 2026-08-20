@@ -44,7 +44,6 @@ def validate_question(question: str):
             "input_guardrail",
             f"Question exceeds {MAX_QUESTION_LENGTH} characters.",
         )
-
     if _INJECTION_PATTERN.search(question):
         raise GuardrailViolation(
             "input_guardrail",

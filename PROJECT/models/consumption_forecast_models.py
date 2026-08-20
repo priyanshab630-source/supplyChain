@@ -2,7 +2,6 @@ from pydantic import BaseModel
 
 
 class ConsumptionForecastResult(BaseModel):
-
     tank_id: str
     current_inventory: float
     avg_daily_consumption: float

@@ -86,9 +86,6 @@ class KGAgent:
         cypher = build_tank_cypher(tank_id)
         records = execute_cypher.invoke({"cypher": cypher})
 
-        # Pass tank_id/question through so generate_insights can
-        # ground its answer (and label) correctly instead of
-        # falling back to a generic "this tank".
         insights = generate_insights.invoke({
             "records": records,
             "question": question,
@@ -102,12 +99,6 @@ class KGAgent:
         )
 
         if should_visualize:
-            # FIXED: previously called `graph_query.invoke({"question": tank_id})`,
-            # which re-derives Cypher via the LLM from scratch - reintroducing
-            # the exact non-determinism this deterministic path exists to avoid
-            # (same question, sometimes 0 records). Reuse the `cypher` already
-            # built above instead, so the insights and the visualization are
-            # guaranteed to reflect the SAME query result.
             graph_path = visualize_subgraph.invoke({"cypher": cypher})
 
         return KGResult(

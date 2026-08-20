@@ -175,27 +175,20 @@ def supplier_node(state: SupplyChainState):
 
     try:
         if tank_id or state.get("supplier_name"):
-
             resolved_supplier_name = state.get("supplier_name")
-
             if not resolved_supplier_name and tank_id:
                 resolved_supplier_name = supplier_engine.get_supplier_for_tank(tank_id)
-
                 if resolved_supplier_name is None:
                     raise ValueError(
                         f"{tank_id} does not have a supplier assigned in the current data."
                     )
-
             result = supplier_engine.run_for_supplier(resolved_supplier_name)
-
         else:
             agent_output = supplier_agent.run(state["question"])
             payload = extract_tool_result(agent_output)
             result = SupplierResult(**payload) if payload else None
-
             if result is None:
                 raise ValueError("Supplier data could not be retrieved.")
-
     except Exception as exc:
         result = None
 
@@ -307,11 +300,6 @@ def allocation_node(state: SupplyChainState):
                 "Please specify a gas type, e.g. "
                 "'How should we allocate Gas B deliveries?'"
             )
-
-        # Default demand: current total daily consumption across
-        # every tank storing this gas (surge-adjusted, so an active
-        # malfunction's elevated demand is reflected in the order
-        # size, not just in the affected tank's own risk score).
         tanks_for_gas = tank_master_df.loc[tank_master_df["gas"] == gas, "tank_id"].tolist()
         total_qty_needed = 0.0
 
@@ -349,8 +337,6 @@ def _extract_delay_days(question: str):
     match = DELAY_DAYS_PATTERN.search(question)
     return int(match.group(1)) if match else None
  
- 
- 
 def shipment_delay_node(state: SupplyChainState):
     print("\n========== SHIPMENT DELAY NODE ==========")
     print("=" * 60)
@@ -367,7 +353,6 @@ def shipment_delay_node(state: SupplyChainState):
                 "Please specify which supplier's shipment is delayed, "
                 "e.g. 'Supplier A's shipment is delayed by 3 days'."
             )
- 
         if delay_days is None:
             raise ValueError(
                 "Please specify the delay length, e.g. 'delayed by 3 days'."
@@ -376,7 +361,7 @@ def shipment_delay_node(state: SupplyChainState):
         result = shipment_delay_agent.report_delay(
             supplier_name=supplier_name,
             delay_days=delay_days,
-            tank_id=tank_id,  # None is fine - agent scans every tank the supplier serves
+            tank_id=tank_id,  
         )
         error = None
  
@@ -402,18 +387,14 @@ MAX_NETWORK_TANKS = 30
 def _resolve_target_tanks(state: SupplyChainState):
     """
     Decide which tanks this question is actually about.
-
     Returns (tank_ids, scope_label, resolve_error).
     """
 
     supplier_name = state.get("supplier_name")
-
     if supplier_name:
         tanks = supplier_engine.get_supplier_tanks(supplier_name)
-
         if tanks:
             return tanks, f"tanks supplied by {supplier_name}", None
-
         return (
             [],
             f"tanks supplied by {supplier_name}",
@@ -475,18 +456,15 @@ def network_node(state: SupplyChainState):
 
         if resolve_error:
             error = resolve_error
-
         else:
             tank_ids = tank_ids[:MAX_NETWORK_TANKS]
             per_tank_errors = []
-
             for tank_id in tank_ids:
                 analyzed = _analyze_single_tank(tank_id)
                 if "error" in analyzed:
                     per_tank_errors.append(f"{tank_id}: {analyzed['error']}")
                 else:
                     results.append(analyzed)
-
             results.sort(key=lambda r: (-r["risk_score"],r["days_of_cover"] if r["days_of_cover"] is not None else float("inf"),))
             if per_tank_errors:
                 error = (f"Could not analyze {len(per_tank_errors)} tank(s) " f"while scanning {scope_label}: " + "; ".join(per_tank_errors))
@@ -666,13 +644,8 @@ def final_answer_node(state: SupplyChainState):
         }
     )
     answer = response.content
- 
-    # HARD check: never let a secret/internal-error pattern reach the user.
     answer = check_for_leakage(answer)
  
-    # SOFT check: log (don't block on) any tank id the answer mentions
-    # that doesn't actually exist - a grounding/hallucination signal.
-    # Never let a guardrail check itself crash answer delivery.
     try:
         known_tank_ids = set(tank_master_df["tank_id"].dropna().unique().tolist())
         ungrounded = find_ungrounded_tank_ids(answer, known_tank_ids)

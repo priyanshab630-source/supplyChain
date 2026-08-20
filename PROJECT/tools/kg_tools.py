@@ -2,10 +2,8 @@ import json
 import os
 import re
 import webbrowser
-
 from pyvis.network import Network
 from langchain.tools import tool
-
 from PROJECT.llm.groq import get_groq_model
 from PROJECT.database.neo4j import get_graph
 from PROJECT.guardrails.cypher_guardrail import validate_cypher
@@ -214,13 +212,10 @@ def visualize_subgraph(cypher: str):
     validate_cypher(cypher)
     graph = get_graph()
     records = graph.query(cypher)
-
     net = Network(height="750px", width="100%", bgcolor="white", font_color="black")
-
     added_nodes = set()
 
     for row in records[:25]:
-
         source = row.get("t")
         target = row.get("n")
         rels = row.get("r")
@@ -250,10 +245,6 @@ def visualize_subgraph(cypher: str):
             net.add_edge(source_id, target_id, label=str(rels))
 
     if not added_nodes:
-        # The Cypher didn't come back aliased as t/r/n, or genuinely
-        # had no results - either way, warn loudly in the terminal
-        # instead of silently writing an empty graph.html. If you
-        # see this, the printed cypher is the thing to inspect.
         print(f"WARNING: visualize_subgraph produced an EMPTY graph for cypher:\n{cypher}")
         print(f"Raw records returned (first 3): {records[:3]}")
 
@@ -274,13 +265,8 @@ def graph_query(question: str):
     """
 
     tank_id = _extract_tank_id(question)
-
     if tank_id:
-        # Deterministic template - no LLM involved, so it can't
-        # produce a mis-aliased query. This is what fixes single-tank
-        # visualizations that were coming back blank.
         cypher = build_tank_cypher(tank_id)
-
     else:
         cypher = _generate_cypher_text(question, force_visualization=True)
 
